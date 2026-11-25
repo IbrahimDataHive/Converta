@@ -75,7 +75,7 @@ DOCX2PDF_AVAILABLE = shutil.which("libreoffice") is not None
 # Page Configuration & Theming
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Vendor Contract Generator",
+    page_title="Converta",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded",
