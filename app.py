@@ -23,20 +23,40 @@ import subprocess
 import shutil
  
  
-def convert_to_pdf(docx_path, pdf_path):
-    if shutil.which("libreoffice") is None:
+def find_libreoffice() -> Optional[str]:
+    """Locates the LibreOffice executable across Linux, macOS, and Windows."""
+    for candidate in ("libreoffice", "soffice"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+
+    if os.name == "nt":
+        win_candidates = [
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        ]
+        for path in win_candidates:
+            if os.path.isfile(path):
+                return path
+
+    return None
+
+
+def convert_to_pdf(docx_path: str, pdf_path: str) -> None:
+    lo_bin = find_libreoffice()
+    if lo_bin is None:
         raise RuntimeError(
             "LibreOffice is not installed. "
-            "Please check packages.txt and restart the app."
+            "Please install LibreOffice (or check packages.txt) and restart the app."
         )
- 
+
     output_dir = os.path.dirname(pdf_path) or "."
     profile_dir = tempfile.mkdtemp(prefix="lo_profile_")
- 
+
     try:
         result = subprocess.run(
             [
-                "libreoffice",
+                lo_bin,
                 f"-env:UserInstallation={Path(profile_dir).resolve().as_uri()}",
                 "--headless",
                 "--convert-to",
@@ -50,25 +70,25 @@ def convert_to_pdf(docx_path, pdf_path):
             timeout=120,
             check=False,
         )
- 
+
         generated_pdf = os.path.join(
             output_dir,
             os.path.splitext(os.path.basename(docx_path))[0] + ".pdf",
         )
- 
+
         if result.returncode != 0 or not os.path.exists(generated_pdf):
             raise RuntimeError(
                 f"PDF conversion failed: {result.stderr or result.stdout}"
             )
- 
+
         if os.path.abspath(generated_pdf) != os.path.abspath(pdf_path):
             os.replace(generated_pdf, pdf_path)
- 
+
     finally:
         shutil.rmtree(profile_dir, ignore_errors=True)
- 
- 
-DOCX2PDF_AVAILABLE = shutil.which("libreoffice") is not None
+
+
+DOCX2PDF_AVAILABLE = find_libreoffice() is not None
 
 
 # -----------------------------------------------------------------------------
@@ -143,6 +163,11 @@ def sanitize_value(val: Any) -> Any:
     return val
 
 
+def normalize_placeholder_key(col_name: Any) -> str:
+    """Normalizes an Excel column name into a valid Jinja2 identifier."""
+    return re.sub(r"[^\w]+", "_", str(col_name).strip().lower()).strip("_")
+
+
 def sanitize_row_context(row: pd.Series) -> Dict[str, Any]:
     """
     Converts a DataFrame row into a clean dictionary context for Jinja2 / docxtpl.
@@ -152,11 +177,11 @@ def sanitize_row_context(row: pd.Series) -> Dict[str, Any]:
     for col_name, value in row.items():
         clean_val = sanitize_value(value)
         context[str(col_name)] = clean_val
-        
-        normalized_key = re.sub(r"[^\w]+", "_", str(col_name).strip().lower()).strip("_")
+
+        normalized_key = normalize_placeholder_key(col_name)
         if normalized_key and normalized_key not in context:
             context[normalized_key] = clean_val
-            
+
     return context
 
 
@@ -433,7 +458,7 @@ def main():
                 data=sample_excel_bytes,
                 file_name="sample_vendor_data.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                width="stretch",
+                use_container_width=True,
             )
         with col_s2:
             try:
@@ -443,10 +468,10 @@ def main():
                     data=sample_doc_bytes,
                     file_name="sample_contract_template.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    width="stretch",
+                    use_container_width=True,
                 )
-            except Exception:
-                pass
+            except Exception as sample_err:
+                st.warning(f"Sample template unavailable: {sample_err}")
 
         st.divider()
 
@@ -499,6 +524,21 @@ def main():
     columns_list = [str(c) for c in df.columns.tolist()]
     detected_id_col, detected_name_col = auto_detect_columns(columns_list)
 
+    excel_signature = (excel_file.name, excel_file.size)
+    if st.session_state.get("last_excel_signature") != excel_signature:
+        st.session_state.last_excel_signature = excel_signature
+        st.session_state.vendor_multiselect = []
+        st.session_state.pop("generated_files", None)
+        st.session_state.pop("generation_errors", None)
+        st.session_state.pop("generation_elapsed", None)
+
+    template_signature = (template_file.name, template_file.size)
+    if st.session_state.get("last_template_signature") != template_signature:
+        st.session_state.last_template_signature = template_signature
+        st.session_state.pop("generated_files", None)
+        st.session_state.pop("generation_errors", None)
+        st.session_state.pop("generation_elapsed", None)
+
     # -------------------------------------------------------------------------
     # Step 2: Column Identification & Data Preview
     # -------------------------------------------------------------------------
@@ -522,11 +562,16 @@ def main():
         with col_c3:
             st.metric("Total Vendors Found", len(df))
 
-        st.dataframe(df.fillna(""), width="stretch", height=220)
+        st.dataframe(df.fillna(""), use_container_width=True, height=220)
 
         with st.expander("📋 View Available Template Placeholders", expanded=False):
-            st.markdown("Use any of these exact tags inside your Word `.docx` template (plus `{{ signature_img }}`):")
-            tags_html = "".join([f'<span class="tag-chip">{{{{ {col} }}}}</span>' for col in columns_list])
+            st.markdown("Use any of these normalized Jinja2 tags inside your Word `.docx` template (plus `{{ signature_img }}`):")
+            seen_tags: List[str] = []
+            for col in columns_list:
+                tag = normalize_placeholder_key(col)
+                if tag and tag not in seen_tags:
+                    seen_tags.append(tag)
+            tags_html = "".join([f'<span class="tag-chip">{{{{ {tag} }}}}</span>' for tag in seen_tags])
             tags_html += '<span class="tag-chip">{{ signature_img }}</span>'
             st.markdown(tags_html, unsafe_allow_html=True)
 
@@ -550,12 +595,12 @@ def main():
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 3])
 
     with ctrl_col1:
-        if st.button("✅ Select All", width="stretch"):
+        if st.button("✅ Select All", use_container_width=True):
             st.session_state.vendor_multiselect = all_indices
             st.rerun()
 
     with ctrl_col2:
-        if st.button("❌ Deselect All", width="stretch"):
+        if st.button("❌ Deselect All", use_container_width=True):
             st.session_state.vendor_multiselect = []
             st.rerun()
 
@@ -585,7 +630,7 @@ def main():
     generate_clicked = st.button(
         f"Generate {len(selected_indices)} Contract{'s' if len(selected_indices) > 1 else ''}",
         type="primary",
-        width="stretch",
+        use_container_width=True,
     )
 
     if generate_clicked:
@@ -597,53 +642,66 @@ def main():
         status_text = st.empty()
 
         generated_files: List[Tuple[str, bytes]] = []
+        used_filenames: set[str] = set()
         errors: List[str] = []
 
         total_selected = len(selected_indices)
         start_time = time.time()
 
+        def make_unique_filename(base_stem: str, ext: str) -> str:
+            candidate = f"{base_stem}{ext}"
+            counter = 2
+            while candidate in used_filenames:
+                candidate = f"{base_stem}_{counter}{ext}"
+                counter += 1
+            used_filenames.add(candidate)
+            return candidate
+
         for i, idx in enumerate(selected_indices):
             row = df.loc[idx]
             v_id = str(sanitize_value(row.get(id_col, idx)))
             v_name = str(sanitize_value(row.get(name_col, f"Vendor_{idx}")))
-            
-            safe_name = re.sub(r"[^\w\-_\. ]", "_", f"{v_id}_{v_name}").strip()
+
+            safe_name = re.sub(r"[^\w\-_\. ]", "_", f"{v_id}_{v_name}").strip(" .")
+            if not safe_name:
+                safe_name = f"Vendor_{idx}"
+            base_stem = f"Contract_{safe_name}"
             status_text.text(f"Rendering contract ({i+1}/{total_selected}): {v_name}...")
 
             try:
                 context = sanitize_row_context(row)
                 doc = DocxTemplate(io.BytesIO(template_bytes))
-                
+
                 # Handle signature image insertion if uploaded
                 if signature_file is not None:
                     sig_bytes = signature_file.getvalue()
                     sig_stream = io.BytesIO(sig_bytes)
                     context["signature_img"] = InlineImage(doc, sig_stream, width=Inches(sig_width_inches))
                 else:
-                    context["signature_img"] = "[Signature Placeholder - No Image Provided]"
+                    context["signature_img"] = ""
 
                 doc.render(context)
-                
+
                 # Generate Word (.docx)
                 if output_format in ["Word (.docx)", "Both (.docx & .pdf)"]:
-                    docx_filename = f"Contract_{safe_name}.docx"
+                    docx_filename = make_unique_filename(base_stem, ".docx")
                     out_stream = io.BytesIO()
                     doc.save(out_stream)
                     generated_files.append((docx_filename, out_stream.getvalue()))
 
                 # Generate PDF (.pdf)
                 if output_format in ["PDF (.pdf)", "Both (.docx & .pdf)"]:
-                    pdf_filename = f"Contract_{safe_name}.pdf"
+                    pdf_filename = make_unique_filename(base_stem, ".pdf")
                     with tempfile.TemporaryDirectory() as tmpdir:
                         temp_docx = os.path.join(tmpdir, "temp.docx")
                         temp_pdf = os.path.join(tmpdir, "temp.pdf")
-                        
+
                         doc.save(temp_docx)
                         convert_to_pdf(temp_docx, temp_pdf)
-                        
+
                         with open(temp_pdf, "rb") as f:
                             pdf_bytes = f.read()
-                            
+
                     generated_files.append((pdf_filename, pdf_bytes))
 
             except Exception as render_err:
@@ -654,6 +712,18 @@ def main():
         elapsed = time.time() - start_time
         status_text.empty()
         progress_bar.empty()
+
+        st.session_state.generated_files = generated_files
+        st.session_state.generation_errors = errors
+        st.session_state.generation_elapsed = elapsed
+
+    # -------------------------------------------------------------------------
+    # Step 5: Output & Downloads (persisted across reruns via session_state)
+    # -------------------------------------------------------------------------
+    if "generated_files" in st.session_state:
+        generated_files = st.session_state.generated_files
+        errors = st.session_state.get("generation_errors", [])
+        elapsed = st.session_state.get("generation_elapsed", 0.0)
 
         if errors:
             for err in errors:
@@ -667,9 +737,6 @@ def main():
             f"🎉 Successfully rendered **{len(generated_files)}** file{'s' if len(generated_files) > 1 else ''} in **{elapsed:.2f}s**!"
         )
 
-        # ---------------------------------------------------------------------
-        # Step 5: Output & Downloads
-        # ---------------------------------------------------------------------
         st.subheader("📥 5. Download Contracts")
 
         if len(generated_files) == 1:
@@ -700,7 +767,7 @@ def main():
                     file_name=zip_filename,
                     mime="application/zip",
                     type="primary",
-                    width="stretch",
+                    use_container_width=True,
                 )
 
             with st.expander("📄 Generated Files Manifest", expanded=True):

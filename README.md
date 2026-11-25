@@ -6,7 +6,7 @@ Automates the generation of customized vendor contracts from an Excel sheet (`.x
 
 ### 1. Prerequisites
 Ensure you have Python 3.9+ installed.
-*(Note: To use the PDF generation feature, you must have Microsoft Word installed on your local Windows/Mac machine.)*
+*(Note: To use the PDF generation feature, LibreOffice must be installed on the machine or container via `packages.txt`.)*
 
 ### 2. Install Dependencies
 ```bash
@@ -34,6 +34,6 @@ Open your browser at `http://localhost:8501`.
 2. **Word Template Uploader**: Accepts a `.docx` document containing Jinja2 placeholders like `{{ vendor_name }}`, `{{ vendor_id }}`, `{{ effective_date }}`.
 3. **Data Preview & Column Mapping**: Inspects rows, auto-detects vendor ID and vendor Name columns, and displays available template tags.
 4. **Interactive Multi-Select**: Filter vendors with `[ID] - [Name]` labels and instant **Select All** / **Deselect All** controls.
-5. **Format Selection**: Choose between outputting standard Word documents (`.docx`) or converting them automatically to PDF (`.pdf`). *(Note: PDF generation requires Microsoft Word installed locally)*.
-6. **Generation**: Renders customized documents with `docxtpl`, optionally converting to PDF behind the scenes using `docx2pdf`, while sanitizing all `NaN` values to clean empty strings.
+5. **Format Selection**: Choose between outputting standard Word documents (`.docx`), PDF (`.pdf`), or both. *(Note: PDF generation requires LibreOffice installed locally or via `packages.txt`.)*
+6. **Generation**: Renders customized documents with `docxtpl`, optionally converting to PDF behind the scenes using headless LibreOffice, while sanitizing all `NaN` values to clean empty strings.
 7. **One-Click Download**: Directly download a single generated file or an in-memory `.zip` archive containing all generated contracts.
