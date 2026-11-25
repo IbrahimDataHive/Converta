@@ -397,7 +397,7 @@ def generate_sample_docx_template() -> bytes:
 # Main Application Flow
 # -----------------------------------------------------------------------------
 def main():
-    st.title("📄 Vendor Contract Generator")
+    st.title("📄 Converta")
     st.markdown(
         "Automate the batch generation of personalized vendor contracts with custom corporate signatures."
     )
