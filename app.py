@@ -549,19 +549,19 @@ def main():
 
         with col_c1:
             id_col = st.selectbox(
-                "Vendor ID Column:",
+                "Mandatory Column:",
                 options=columns_list,
-                index=columns_list.index(detected_id_col) if detected_id_col in columns_list else 0,
+                index=None,
             )
         with col_c2:
             name_col = st.selectbox(
-                "Vendor Name Column:",
+                 "Optional Column 2:",
                 options=columns_list,
-                index=columns_list.index(detected_name_col) if detected_name_col in columns_list else 0,
+                index=None,
             )
         with col_c4:
             extra_col_1 = st.selectbox(
-                "Optional Column 1:",
+                "Optional Column 3:",
                 options=columns_list,
                 index=None,
                 placeholder="None (Optional)",
@@ -569,7 +569,7 @@ def main():
             )
         with col_c5:
             extra_col_2 = st.selectbox(
-                "Optional Column 2:",
+                "Optional Column 4:",
                 options=columns_list,
                 index=None,
                 placeholder="None (Optional)",
