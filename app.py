@@ -558,6 +558,7 @@ def main():
                  "Optional Column 2:",
                 options=columns_list,
                 index=None,
+                placeholder="None (Optional)",
             )
         with col_c4:
             extra_col_1 = st.selectbox(
