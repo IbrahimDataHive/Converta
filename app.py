@@ -552,28 +552,37 @@ def main():
                 "Mandatory Column:",
                 options=columns_list,
                 index=None,
+                placeholder="Select column...",
+                key="id_col",
             )
+        opt2_options = [c for c in columns_list if c != id_col]
         with col_c2:
             name_col = st.selectbox(
-                 "Optional Column 2:",
-                options=columns_list,
+                "Optional Column 2:",
+                options=opt2_options,
                 index=None,
                 placeholder="None (Optional)",
+                disabled=(id_col is None or not opt2_options),
+                key="name_col",
             )
+        opt3_options = [c for c in opt2_options if c != name_col]
         with col_c4:
             extra_col_1 = st.selectbox(
                 "Optional Column 3:",
-                options=columns_list,
+                options=opt3_options,
                 index=None,
                 placeholder="None (Optional)",
+                disabled=(id_col is None or not opt3_options),
                 key="extra_col_1",
             )
+        opt4_options = [c for c in opt3_options if c != extra_col_1]
         with col_c5:
             extra_col_2 = st.selectbox(
                 "Optional Column 4:",
-                options=columns_list,
+                options=opt4_options,
                 index=None,
                 placeholder="None (Optional)",
+                disabled=(id_col is None or not opt4_options),
                 key="extra_col_2",
             )
         with col_c3:
@@ -595,11 +604,15 @@ def main():
     # -------------------------------------------------------------------------
     # Step 3: Interactive Selection (Select All / Deselect All)
     # -------------------------------------------------------------------------
+    if id_col is None:
+        st.info("👆 Please select the **Mandatory Column** above to unlock vendor selection and contract generation.")
+        return
+
     st.subheader("🎯 3. Select Vendors for Contract Generation")
 
-    def get_extra_values(row: pd.Series) -> List[str]:
+    def get_optional_values(row: pd.Series) -> List[str]:
         vals: List[str] = []
-        for col in (extra_col_1, extra_col_2):
+        for col in (name_col, extra_col_1, extra_col_2):
             if col is not None:
                 val = str(sanitize_value(row.get(col, ""))).strip()
                 if val:
@@ -609,10 +622,8 @@ def main():
     vendor_options: Dict[int, str] = {}
     for idx, row in df.iterrows():
         v_id = str(sanitize_value(row.get(id_col, idx)))
-        v_name = str(sanitize_value(row.get(name_col, f"Vendor {idx}")))
-        extra_vals = get_extra_values(row)
-        display_name = " - ".join([v_name, *extra_vals]) if extra_vals else v_name
-        vendor_options[int(idx)] = f"[{v_id}] - {display_name}"
+        opt_vals = get_optional_values(row)
+        vendor_options[int(idx)] = f"[{v_id}] - {' - '.join(opt_vals)}" if opt_vals else f"[{v_id}]"
 
     all_indices = list(vendor_options.keys())
 
@@ -688,15 +699,15 @@ def main():
         for i, idx in enumerate(selected_indices):
             row = df.loc[idx]
             v_id = str(sanitize_value(row.get(id_col, idx)))
-            v_name = str(sanitize_value(row.get(name_col, f"Vendor_{idx}")))
-            extra_vals = get_extra_values(row)
+            opt_vals = get_optional_values(row)
+            display_label = " - ".join(opt_vals) if opt_vals else v_id
 
-            name_parts = [p for p in [v_id, v_name, *extra_vals] if p]
+            name_parts = [p for p in [v_id, *opt_vals] if p]
             safe_name = re.sub(r"[^\w\-_\. ]", "_", "_".join(name_parts)).strip(" .")
             if not safe_name:
                 safe_name = f"Vendor_{idx}"
             base_stem = f"Contract_{safe_name}"
-            status_text.text(f"Rendering contract ({i+1}/{total_selected}): {v_name}...")
+            status_text.text(f"Rendering contract ({i+1}/{total_selected}): {display_label}...")
 
             try:
                 context = sanitize_row_context(row)
@@ -735,7 +746,7 @@ def main():
                     generated_files.append((pdf_filename, pdf_bytes))
 
             except Exception as render_err:
-                errors.append(f"Failed to generate for row {idx} ({v_name}): {str(render_err)}")
+                errors.append(f"Failed to generate for row {idx} ({display_label}): {str(render_err)}")
 
             progress_bar.progress((i + 1) / total_selected)
 
