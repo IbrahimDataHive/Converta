@@ -545,7 +545,7 @@ def main():
     st.subheader("📊 2. Data Preview & Column Mapping")
 
     with st.expander("🔍 Inspect Uploaded Vendor Data & Key Column Selection", expanded=True):
-        col_c1, col_c2, col_c3 = st.columns([1, 1, 1])
+        col_c1, col_c2, col_c4, col_c5 ,col_c3 = st.columns([1, 1, 1, 1, 1])
 
         with col_c1:
             id_col = st.selectbox(
@@ -558,6 +558,22 @@ def main():
                 "Vendor Name Column:",
                 options=columns_list,
                 index=columns_list.index(detected_name_col) if detected_name_col in columns_list else 0,
+            )
+        with col_c4:
+            extra_col_1 = st.selectbox(
+                "Optional Column 1:",
+                options=columns_list,
+                index=None,
+                placeholder="None (Optional)",
+                key="extra_col_1",
+            )
+        with col_c5:
+            extra_col_2 = st.selectbox(
+                "Optional Column 2:",
+                options=columns_list,
+                index=None,
+                placeholder="None (Optional)",
+                key="extra_col_2",
             )
         with col_c3:
             st.metric("Total Vendors Found", len(df))
@@ -580,11 +596,22 @@ def main():
     # -------------------------------------------------------------------------
     st.subheader("🎯 3. Select Vendors for Contract Generation")
 
+    def get_extra_values(row: pd.Series) -> List[str]:
+        vals: List[str] = []
+        for col in (extra_col_1, extra_col_2):
+            if col is not None:
+                val = str(sanitize_value(row.get(col, ""))).strip()
+                if val:
+                    vals.append(val)
+        return vals
+
     vendor_options: Dict[int, str] = {}
     for idx, row in df.iterrows():
         v_id = str(sanitize_value(row.get(id_col, idx)))
         v_name = str(sanitize_value(row.get(name_col, f"Vendor {idx}")))
-        vendor_options[int(idx)] = f"[{v_id}] - {v_name}"
+        extra_vals = get_extra_values(row)
+        display_name = " - ".join([v_name, *extra_vals]) if extra_vals else v_name
+        vendor_options[int(idx)] = f"[{v_id}] - {display_name}"
 
     all_indices = list(vendor_options.keys())
 
@@ -661,8 +688,10 @@ def main():
             row = df.loc[idx]
             v_id = str(sanitize_value(row.get(id_col, idx)))
             v_name = str(sanitize_value(row.get(name_col, f"Vendor_{idx}")))
+            extra_vals = get_extra_values(row)
 
-            safe_name = re.sub(r"[^\w\-_\. ]", "_", f"{v_id}_{v_name}").strip(" .")
+            name_parts = [p for p in [v_id, v_name, *extra_vals] if p]
+            safe_name = re.sub(r"[^\w\-_\. ]", "_", "_".join(name_parts)).strip(" .")
             if not safe_name:
                 safe_name = f"Vendor_{idx}"
             base_stem = f"Contract_{safe_name}"
