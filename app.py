@@ -706,7 +706,7 @@ def main():
             safe_name = re.sub(r"[^\w\-_\. ]", "_", "_".join(name_parts)).strip(" .")
             if not safe_name:
                 safe_name = f"Vendor_{idx}"
-            base_stem = f"Contract_{safe_name}"
+            base_stem = f"{safe_name}"
             status_text.text(f"Rendering contract ({i+1}/{total_selected}): {display_label}...")
 
             try:
